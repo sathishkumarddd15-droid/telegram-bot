@@ -170,9 +170,9 @@ application = Application.builder().token(TOKEN).build()
 application.add_handler(MessageHandler(filters.Regex(r"^/leo\d{1,2}.*$"), dynamic_leo))
 
 @app.route(f"/{TOKEN}", methods=["POST"])
-def webhook():
+async def webhook():
     update = Update.de_json(request.get_json(force=True), application.bot)
-    application.update_queue.put(update)
+    await application.update_queue.put(update)
     return "OK", 200
 
 @app.route("/")
