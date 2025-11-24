@@ -2,6 +2,7 @@ import os
 import re
 import logging
 import pandas as pd
+import asyncio
 from flask import Flask, request
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters
@@ -182,8 +183,13 @@ def home():
 # Main entry
 # ---------------------------
 if __name__ == "__main__":
-    # Set webhook URL (your Render service URL)
     url = os.getenv("RENDER_EXTERNAL_URL", "https://ib-bot-c33s.onrender.com")
     webhook_url = f"{url}/{TOKEN}"
-    application.bot.set_webhook(webhook_url)
-    app.run(host="0.0.0.0", port=10000)
+
+    async def main():
+        # Register webhook properly
+        await application.bot.set_webhook(webhook_url)
+        # Start Flask server
+        app.run(host="0.0.0.0", port=10000)
+
+    asyncio.run(main())
