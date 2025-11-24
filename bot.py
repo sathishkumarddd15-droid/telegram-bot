@@ -1,24 +1,29 @@
 import os
 import re
 import logging
+import threading
 import pandas as pd
+from flask import Flask
 from telegram.ext import ApplicationBuilder, MessageHandler, filters
 
-# 🔧 Logging setup
+# ---------------------------
+# Logging setup
+# ---------------------------
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
-# 🔑 Bot token and Excel config
+# ---------------------------
+# Bot token and Excel config
+# ---------------------------
 TOKEN = os.getenv("TOKEN")
 EXCEL_PATH = os.getenv("EXCEL_PATH", "PostShipment Master UpdatedFy25.xlsm")
 SHEET_NAME = "Master Data"
 
 # ---------------------------
-# Helpers
+# Currency conversion rates
 # ---------------------------
-
 CURRENCY_RATES = {
     "INR": 1.0,
     "USD": 83.0,
@@ -27,6 +32,9 @@ CURRENCY_RATES = {
     "GBP": 105.0
 }
 
+# ---------------------------
+# Helpers
+# ---------------------------
 def load_df():
     df = pd.read_excel(EXCEL_PATH, sheet_name=SHEET_NAME)
     df.columns = df.columns.str.strip().str.upper()
@@ -99,9 +107,8 @@ def format_spares_table(summary, month, country=None):
     return title + ":\n```\n" + "\n".join(lines[:60]) + "\n```"
 
 # ---------------------------
-# Command Handler (async for v20)
+# Command Handler (async v20)
 # ---------------------------
-
 async def dynamic_leo(update, context):
     try:
         command = update.message.text
@@ -155,12 +162,27 @@ async def dynamic_leo(update, context):
         await update.message.reply_text("⚠️ Error generating LEO summary.")
 
 # ---------------------------
-# Bot setup (v20 style)
+# Dummy Flask server for Render port binding
 # ---------------------------
+app = Flask(__name__)
 
+@app.route('/')
+def home():
+    return "Bot is running!"
+
+def run_flask():
+    app.run(host="0.0.0.0", port=10000)
+
+# ---------------------------
+# Bot setup
+# ---------------------------
 def main():
     application = ApplicationBuilder().token(TOKEN).build()
     application.add_handler(MessageHandler(filters.Regex(r"^/leo\d{1,2}.*$"), dynamic_leo))
+
+    # Run Flask in a separate thread so Render sees a port
+    threading.Thread(target=run_flask).start()
+
     print("✅ Bot is running... Waiting for Telegram commands.")
     application.run_polling()
 
