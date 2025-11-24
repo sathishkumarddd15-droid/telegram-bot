@@ -1,10 +1,10 @@
 import os
 import re
 import logging
-import threading
 import pandas as pd
-from flask import Flask
-from telegram.ext import ApplicationBuilder, MessageHandler, filters
+from flask import Flask, request
+from telegram import Update
+from telegram.ext import Application, MessageHandler, filters
 
 # ---------------------------
 # Logging setup
@@ -107,9 +107,9 @@ def format_spares_table(summary, month, country=None):
     return title + ":\n```\n" + "\n".join(lines[:60]) + "\n```"
 
 # ---------------------------
-# Command Handler (async v20)
+# Command Handler
 # ---------------------------
-async def dynamic_leo(update, context):
+async def dynamic_leo(update: Update, context):
     try:
         command = update.message.text
         month, country = extract_month_and_country(command)
@@ -162,29 +162,28 @@ async def dynamic_leo(update, context):
         await update.message.reply_text("⚠️ Error generating LEO summary.")
 
 # ---------------------------
-# Dummy Flask server for Render port binding
+# Flask app for webhook
 # ---------------------------
 app = Flask(__name__)
+application = Application.builder().token(TOKEN).build()
+application.add_handler(MessageHandler(filters.Regex(r"^/leo\d{1,2}.*$"), dynamic_leo))
 
-@app.route('/')
+@app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), application.bot)
+    application.update_queue.put(update)
+    return "OK", 200
+
+@app.route("/")
 def home():
-    return "Bot is running!"
-
-def run_flask():
-    app.run(host="0.0.0.0", port=10000)
+    return "Bot is running!", 200
 
 # ---------------------------
-# Bot setup
+# Main entry
 # ---------------------------
-def main():
-    application = ApplicationBuilder().token(TOKEN).build()
-    application.add_handler(MessageHandler(filters.Regex(r"^/leo\d{1,2}.*$"), dynamic_leo))
-
-    # Run Flask in a separate thread so Render sees a port
-    threading.Thread(target=run_flask).start()
-
-    print("✅ Bot is running... Waiting for Telegram commands.")
-    application.run_polling()
-
 if __name__ == "__main__":
-    main()
+    # Set webhook URL (your Render service URL)
+    url = os.getenv("RENDER_EXTERNAL_URL", "https://ib-bot-c33s.onrender.com")
+    webhook_url = f"{url}/{TOKEN}"
+    application.bot.set_webhook(webhook_url)
+    app.run(host="0.0.0.0", port=10000)
